@@ -3,6 +3,14 @@ GO_SRC := $(shell find . -type f -name "*.go")
 
 CONTAINER_NAME ?= wrouesnel/postgres_exporter:latest
 
+BIN_NAME:=postgres_exporter
+VERSION=1.0.2
+PACK_NAME=postgres-exporter_$(VERSION)
+DEB_PATH=$(PACK_NAME)/DEBIAN
+PACKAGE=$(PACK_NAME).deb
+REPO_URL:=http://apt.octopus.compcenter.org
+REPO_NAME:=octopus-dev
+
 all: vet test postgres_exporter
 
 # Simple go build
@@ -34,3 +42,17 @@ docker-build: postgres_exporter
 	docker build -t $(CONTAINER_NAME) .
 
 .PHONY: docker-build docker test vet
+
+deb:
+	mkdir -p $(PACK_NAME)/usr/local/bin
+	mkdir -p $(DEB_PATH)
+	cp -r debian/control $(DEB_PATH)/control
+	sed -i s/#VERSION#/$(VERSION)/g "$(DEB_PATH)/control"
+	cp -r debian/files/* $(PACK_NAME)/
+	cp $(BIN_NAME) $(PACK_NAME)/usr/local/bin/
+	dpkg-deb --build $(PACK_NAME)
+
+publish:
+	curl -v -X POST -F file=@$(PACKAGE) $(REPO_URL)/api/files/$(PACKAGE)
+	curl -v -X POST $(REPO_URL)/api/repos/$(REPO_NAME)/file/$(PACKAGE)
+	curl -v -X PUT -H 'Content-Type: application/json' --data '{}' $(REPO_URL)/api/publish/$(REPO_NAME)/trusty
